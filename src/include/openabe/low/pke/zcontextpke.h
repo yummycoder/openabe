@@ -68,6 +68,14 @@ public:
   virtual OpenABE_ERROR decryptKEM(const std::string &pkID, const std::string &skID,
                                OpenABECiphertext *ciphertext, uint32_t keyBitLen,
                                const std::shared_ptr<OpenABESymKey>& key) = 0;
+  
+  virtual OpenABE_ERROR multiEncryptKEM(OpenABERNG *rng, const std::vector<std::string>& pkIDs,
+                           OpenABEByteString *senderID, uint32_t keyBitLen,
+                           const std::shared_ptr<OpenABESymKey> &key,
+                           OpenABECiphertext *ciphertext, std::unique_ptr<oabe::crypto::OpenABEMultiEveSymKeyAuthEnc> &symmEnc) = 0;
+  virtual OpenABE_ERROR multiDecryptKEM(const std::string &pkID, const std::string &skID,
+                           OpenABECiphertext *ciphertext, uint32_t keyBitLen, const std::shared_ptr<OpenABESymKey> &key,
+                           std::unique_ptr<oabe::crypto::OpenABEMultiEveSymKeyAuthEnc> &symmEnc) = 0;
 };
 
 ///
@@ -99,6 +107,15 @@ public:
   OpenABE_ERROR decryptKEM(const std::string &pkID, const std::string &keyID,
                        OpenABECiphertext *ciphertext, uint32_t keyBitLen,
                        const std::shared_ptr<OpenABESymKey>& key);
+
+  OpenABE_ERROR multiEncryptKEM(OpenABERNG *rng, const std::vector<std::string>& pkIDs,
+                           OpenABEByteString *senderID, uint32_t keyBitLen,
+                           const std::shared_ptr<OpenABESymKey> &key,
+                           OpenABECiphertext *ciphertext, std::unique_ptr<oabe::crypto::OpenABEMultiEveSymKeyAuthEnc> &symmEnc);
+  OpenABE_ERROR multiDecryptKEM(const std::string &pkID, const std::string &skID,
+                           OpenABECiphertext *ciphertext, uint32_t keyBitLen,
+                           const std::shared_ptr<OpenABESymKey> &key,
+                           std::unique_ptr<oabe::crypto::OpenABEMultiEveSymKeyAuthEnc> &symmEnc);
 };
 
 
@@ -128,6 +145,12 @@ public:
                     const std::string& plaintext, OpenABECiphertext *ciphertext);
   OpenABE_ERROR decrypt(const std::string &pkID, const std::string &skID,
                     std::string &plaintext, OpenABECiphertext *ciphertext);
+
+  OpenABE_ERROR multiEncrypt(OpenABERNG *rng, const std::vector<std::string>& pkIDs,
+                             const std::string &senderpkID, const std::string &plaintext,
+                             OpenABECiphertext *ciphertext);
+  OpenABE_ERROR multiDecrypt(const std::string &pkID, const std::string &skID,
+                             std::string &plaintext, OpenABECiphertext *ciphertext);
 };
 
 }

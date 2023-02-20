@@ -81,6 +81,30 @@ public:
                OpenABEByteString* ciphertext, OpenABEByteString* tag);
 };
 
+class OpenABEMultiEveSymKeyAuthEnc : ZObject {
+private:
+  EVP_CIPHER *cipher;
+  uint8_t iv[AES_BLOCK_SIZE+1];
+  OpenABEByteString aad;
+  OpenABEByteString key;
+  bool aad_set;
+  uint32_t iv_len;
+
+public:
+  OpenABEMultiEveSymKeyAuthEnc(int securitylevel);
+  ~OpenABEMultiEveSymKeyAuthEnc();
+
+  void chooseRandomIV();
+  void getIV(OpenABEByteString* iv);
+  void setIV(OpenABEByteString* iv);
+  void setAddAuthData(OpenABEByteString &aad);
+  void setAddAuthData(uint8_t* aad, uint32_t aad_len);
+  OpenABE_ERROR encrypt(const std::string& plaintext, OpenABEByteString* key,
+                    OpenABEByteString* ciphertext, OpenABEByteString* tag);
+  bool decrypt(std::string& plaintext, OpenABEByteString* key, 
+               OpenABEByteString* ciphertext, OpenABEByteString* tag);
+};
+
 class OpenABESymKeyHandle {
 public:
   virtual void encrypt(std::string& ciphertext,

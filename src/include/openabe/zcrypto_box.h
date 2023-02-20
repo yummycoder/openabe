@@ -154,6 +154,12 @@ public:
   bool decrypt(const std::string receiver_id, const std::string &ciphertext,
                std::string &plaintext);
 
+  bool multiEncrypt(const std::string sender_id, const std::string receiver_ids[],
+               const int receiver_num, const std::string &plaintext,
+               std::string &ciphertext);
+  int multiDecrypt(const std::string sender_id, const std::string receiver_id, 
+                         const std::string &ciphertext, std::string &plaintext);
+
 private:
   std::unique_ptr<OpenABEContextSchemePKE> schemeContext_;
   std::string ec_id_;

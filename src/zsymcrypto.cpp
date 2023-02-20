@@ -344,6 +344,231 @@ OpenABESymKeyAuthEnc::decrypt(string& plaintext, OpenABEByteString* iv, OpenABEB
 }
 
 /********************************************************************************
+ * Implementation of the OpenABEMultiEveSymKeyAuthEnc class
+ ********************************************************************************/
+
+
+OpenABEMultiEveSymKeyAuthEnc::OpenABEMultiEveSymKeyAuthEnc(int securitylevel): ZObject()
+{
+    if(securitylevel == DEFAULT_AES_SEC_LEVEL) {
+        this->cipher = (EVP_CIPHER *) EVP_aes_256_gcm();
+        // cout << "cipher_block_size: " << EVP_CIPHER_block_size(this->cipher) << endl;
+    }
+    this->iv_len = AES_BLOCK_SIZE;
+    this->aad_set = false;
+}
+
+
+OpenABEMultiEveSymKeyAuthEnc::~OpenABEMultiEveSymKeyAuthEnc()
+{
+    if (this->aad_set) {
+        this->aad.zeroize();
+    }
+}
+
+void
+OpenABEMultiEveSymKeyAuthEnc::chooseRandomIV()
+{
+    RAND_bytes(this->iv, AES_BLOCK_SIZE);
+}
+
+void
+OpenABEMultiEveSymKeyAuthEnc::getIV(OpenABEByteString* iv)
+{
+    iv->clear();
+    iv->appendArray(this->iv, this->iv_len);
+}
+
+void
+OpenABEMultiEveSymKeyAuthEnc::setIV(OpenABEByteString* iv)
+{
+    memcpy(this->iv, iv->getInternalPtr(), this->iv_len);
+}
+
+void
+OpenABEMultiEveSymKeyAuthEnc::setAddAuthData(OpenABEByteString &aad)
+{
+    if(aad.size() == 0) {
+        // fill AAD buffer with 0's
+        this->aad.fillBuffer(0, AES_BLOCK_SIZE);
+    }
+    else {
+        // copy 'aad'
+        this->aad = aad;
+    }
+    this->aad_set = true;
+}
+
+void
+OpenABEMultiEveSymKeyAuthEnc::setAddAuthData(uint8_t *aad, uint32_t aad_len)
+{
+    this->aad.clear();
+    if(aad) {
+        this->aad.appendArray(aad, aad_len);
+    } else {
+        // fill AAD buffer with 0's
+        this->aad.fillBuffer(0, AES_BLOCK_SIZE);
+    }
+    this->aad_set = true;
+}
+
+
+OpenABE_ERROR
+OpenABEMultiEveSymKeyAuthEnc::encrypt(const string& plaintext, OpenABEByteString* key, OpenABEByteString *ciphertext, OpenABEByteString *tag)
+{
+    OpenABE_ERROR result = OpenABE_NOERROR;
+    uint8_t *ct = nullptr;
+
+    try {
+        ASSERT_NOTNULL(ciphertext);
+        ASSERT_NOTNULL(tag);
+
+        EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+        uint8_t *pt_ptr = (uint8_t *) plaintext.c_str();
+        int len = 0, ctlen, pt_len = plaintext.size();
+        if(pt_len < AES_BLOCK_SIZE)
+            /* add block size to the len */
+            len += AES_BLOCK_SIZE;
+        else
+            /* add pt_len + block size to len */
+            len += pt_len;
+        // allocate the temp output ciphertext buffer
+        // uint8_t ct[len+1];
+        ct = (uint8_t*) malloc(len+1);
+        MALLOC_CHECK_OUT_OF_MEMORY(ct);
+        memset(ct, 0, len+1);
+
+        // cout << "Plaintext:\n";
+        // BIO_dump_fp(stdout, (const char *) &((*plaintext)[0]), plaintext->size());
+        // cout << "Enc Key:\n";
+        // BIO_dump_fp(stdout, (const char *) key->getInternalPtr(), key->size());
+
+        /* set cipher type and mode */
+        EVP_EncryptInit_ex(ctx, this->cipher, NULL, NULL, NULL);
+        /* set the IV length as 128-bits */
+        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, AES_BLOCK_SIZE, NULL);
+        /* initialize key and IV */
+        EVP_EncryptInit_ex(ctx, NULL, NULL, key->getInternalPtr(), this->iv);
+
+        /* specify the additional authentication data (aad) */
+        if (this->aad_set) {
+            EVP_EncryptUpdate(ctx, NULL, &ctlen, this->aad.getInternalPtr(), this->aad.size());
+        }
+
+        /* encrypt plaintext */
+        EVP_EncryptUpdate(ctx, ct, &ctlen, pt_ptr, pt_len);
+
+        // cout << "Ciphertext:\n";
+        // BIO_dump_fp(stdout, (const char *) ct, ctlen);
+        ciphertext->clear();
+        ciphertext->appendArray(ct, ctlen);
+
+        /* finalize: computes authentication tag*/
+        EVP_EncryptFinal_ex(ctx, ct, &len);
+        // For AES-GCM, the 'len' should be '0' because there is no extra bytes used for padding.
+        ASSERT(len == 0, OpenABE_ERROR_UNEXPECTED_EXTRA_BYTES);
+
+        /* retrieve the tag */
+        int tag_len = AES_BLOCK_SIZE;
+        uint8_t tag_buf[tag_len+1];
+        memset(tag_buf, 0, tag_len+1);
+        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, tag_len, tag_buf);
+
+        // cout << "Tag:\n";
+        // BIO_dump_fp(stdout, (const char *) tag_buf, tag_len);
+        tag->clear();
+        tag->appendArray(tag_buf, tag_len);
+
+        EVP_CIPHER_CTX_free(ctx);
+    } catch(OpenABE_ERROR& e) {
+        result = e;
+    }
+    if (ct)
+        free(ct);
+    return result;
+}
+
+bool
+OpenABEMultiEveSymKeyAuthEnc::decrypt(string& plaintext, OpenABEByteString* key, OpenABEByteString* ciphertext, OpenABEByteString* tag)
+{
+    ASSERT_NOTNULL(ciphertext);
+    ASSERT_NOTNULL(tag);
+
+    if(ciphertext->size() == 0) {
+        /* ciphertext has to be greater than 0 */
+        return false;
+    }
+
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    uint8_t *pt = nullptr;
+    OpenABEByteString pt_buf;
+
+    int pt_len, retValue;
+    uint8_t *ct_ptr = ciphertext->getInternalPtr();
+    int ct_len = ciphertext->size();
+    // cout << "Dec Ciphertext:\n";
+    // BIO_dump_fp(stdout, (const char *) ct_ptr, ct_len);
+
+    uint8_t *tag_ptr =  tag->getInternalPtr();
+    int tag_len = tag->size();
+    ASSERT(tag_len == AES_BLOCK_SIZE, OpenABE_ERROR_INVALID_TAG_LENGTH);
+    // cout << "Dec Tag:\n";
+    // BIO_dump_fp(stdout, (const char *) tag_ptr, tag_len);
+
+    /* set cipher type and mode */
+    EVP_DecryptInit_ex(ctx, this->cipher, NULL, NULL, NULL);
+    /* set the IV length as 128-bits */
+    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, this->iv_len, NULL);
+    /* specify key and iv */
+    // cout << "Dec Key:\n";
+    // BIO_dump_fp(stdout, (const char *) key->getInternalPtr(), key->size());
+    EVP_DecryptInit_ex(ctx, NULL, NULL, key->getInternalPtr(), this->iv);
+
+    // OpenSSL says tag must be set *before* any EVP_DecryptUpdate call.
+    // This is a restriction for OpenSSL v1.0.1c and prior versions but also works
+    // thesame for later versions. To avoid OpenSSL version checks, we set the tag
+    // here which should work across all versions.
+    /* set the tag expected value */
+    EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, tag_len, tag_ptr);
+
+    /* specify additional authentication data */
+    if(this->aad_set) {
+        EVP_DecryptUpdate(ctx, NULL, &pt_len, this->aad.getInternalPtr(), this->aad.size());
+    }
+
+    // uint8_t pt[ct_len+1];
+    pt = (uint8_t*) malloc(ct_len+1);
+    MALLOC_CHECK_OUT_OF_MEMORY(pt);
+    memset(pt, 0, ct_len+1);
+    /* decrypt and store plaintext in pt buffer */
+    EVP_DecryptUpdate(ctx, pt, &pt_len, ct_ptr, ct_len);
+    pt_buf.appendArray(pt, (uint32_t) pt_len);
+
+    // cout << "Plaintext:\n";
+    // BIO_dump_fp(stdout, (const char *) pt, pt_len);
+
+    /* finalize decryption */
+    retValue = EVP_DecryptFinal_ex(ctx, pt, &pt_len);
+    if (pt) {
+        free(pt);
+    }
+    // printf("Tag Verify %s\n", retValue > 0 ? "Successful!" : "Failed!");
+
+    EVP_CIPHER_CTX_free(ctx);
+    if(retValue > 0) {
+        /* tag verification successful */
+        plaintext = pt_buf.toString();
+        pt_buf.zeroize();
+        return true;
+    }
+    else {
+        /* authentication failure */
+        return false;
+    }
+}
+
+
+/********************************************************************************
  * Implementation of the OpenABESymKeyHandleImpl class
  ********************************************************************************/
 

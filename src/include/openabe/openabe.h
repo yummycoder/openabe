@@ -138,11 +138,11 @@ extern "C" {
 #include <openabe/tools/zlsss.h>
 #include <openabe/keys/zkdf.h>
 #include <openabe/zcontext.h>
+#include <openabe/zsymcrypto.h>
 #include <openabe/low/ske/zcontextske.h>
 #include <openabe/low/pke/zcontextpke.h>
 #include <openabe/low/pksig/zcontextpksig.h>
 #include <openabe/zcontextabe.h>
-#include <openabe/zsymcrypto.h>
 #include <openabe/zcontextcca.h>
 #include <openabe/low/abe/zcontextcpwaters.h>
 #include <openabe/low/abe/zcontextkpgpsw.h>

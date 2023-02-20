@@ -233,6 +233,9 @@ const char *OpenABE_errorToString(OpenABE_ERROR error) {
       case OpenABE_ERROR_UNKNOWN:
         return "Unknown error";
         break;
+      case OpenABE_NOT_RIGHT_RECEIVER:
+        return "Not the right receiver";
+        break;
       default:
         return "Unrecognized error code";
         break;
