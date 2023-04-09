@@ -516,18 +516,71 @@ int OpenPKEContext::multiDecrypt(const string sender_id, const string receiver_i
   ct.loadFromBytes(ct_buf);
 
   // check whether current receiver in the list
-  vector<string> cipherCompKey = ct.getKeys();
-  bool rightReceive = false;
-  for (vector<string>::iterator iter = cipherCompKey.begin(); iter != cipherCompKey.end(); iter++) {
-    if (*iter == (receiver_id + "_Key")) rightReceive = true;
-  }
-  //not right receiver
-  if (!rightReceive) {
+
+  if (!ct.contains(receiver_id + "_Key")) {
     plaintext = "";
     return 2;
   }
+  // vector<string> cipherCompKey = ct.getKeys();
+  // bool rightReceive = false;
+  // for (vector<string>::iterator iter = cipherCompKey.begin(); iter != cipherCompKey.end(); iter++) {
+  //   if (*iter == (receiver_id + "_Key")) rightReceive = true;
+  // }
+  // //not right receiver
+  // if (!rightReceive) {
+  //   plaintext = "";
+  //   return 2;
+  // }
 
   if ((result =schemeContext_->multiDecrypt(OpenABE_PK_PREFIX(sender_id),
+                                        OpenABE_SK_PREFIX(receiver_id), plaintext,
+                                        &ct)) != OpenABE_NOERROR) {
+    return false;
+  }
+
+  return 1;
+}
+
+bool OpenPKEContext::multiEncryptNoList(const string sender_id, const string receiver_ids[],
+                         const int receiver_num, const string &plaintext, string &ciphertext) {
+  OpenABE_ERROR result;
+  OpenABECiphertext ct;
+  OpenABEByteString ct_buf;
+  vector<string> pkids;
+
+  for (int i = 0; i < receiver_num; i++) {
+    pkids.push_back(OpenABE_PK_PREFIX(receiver_ids[i]));
+  }
+
+  if ((result = schemeContext_->multiEncryptNoList(nullptr, pkids,
+                                        OpenABE_PK_PREFIX(sender_id), plaintext,
+                                        &ct)) != OpenABE_NOERROR) {
+    throw ZCryptoBoxException("encrypt: " + string(OpenABE_errorToString(result)));
+  }
+  ct.exportToBytes(ct_buf);
+  if (base64Encode_) {
+    const string str = ct_buf.toString();
+    ciphertext = Base64Encode((const uint8_t *)str.c_str(), str.size());
+  } else
+    ciphertext = ct_buf.toString();
+
+  return true;
+}
+
+int OpenPKEContext::multiDecryptNoList(const string sender_id, const string receiver_id, 
+                         const string &ciphertext, string &plaintext) {
+  OpenABE_ERROR result;
+  OpenABEByteString ct_buf;
+  OpenABECiphertext ct;
+  if (base64Encode_) {
+    ct_buf += Base64Decode(ciphertext);
+  } else
+    ct_buf += ciphertext;
+  // now we can convert into a OpenABECiphertext structure
+  ct.loadFromBytes(ct_buf);
+
+
+  if ((result =schemeContext_->multiDecryptNoList(OpenABE_PK_PREFIX(sender_id),
                                         OpenABE_SK_PREFIX(receiver_id), plaintext,
                                         &ct)) != OpenABE_NOERROR) {
     return false;
