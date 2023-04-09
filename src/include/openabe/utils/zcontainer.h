@@ -82,6 +82,9 @@ public:
   OpenABE_ERROR   zeroize();
 
   std::vector<std::string> getKeys();
+
+  bool contains(const std::string &name);
+
   friend bool operator==(const OpenABEContainer&, const OpenABEContainer&);
 };
 

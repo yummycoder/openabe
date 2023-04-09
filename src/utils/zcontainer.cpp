@@ -246,6 +246,15 @@ std::vector<std::string> OpenABEContainer::getKeys() {
   return keyList;
 }
 
+bool OpenABEContainer::contains(const std::string &name) {
+  std::map<std::string, ZObject *>::iterator iter = this->val.find(name);
+
+  if (iter != this->val.end()) {
+    return true;
+  } else
+    return false;
+}
+
 bool operator==(const OpenABEContainer &c1, const OpenABEContainer &c2) {
   // check that the 'keys' of the containers are equal
   std::vector<std::string> keyList1 = const_cast<OpenABEContainer &>(c1).getKeys();
